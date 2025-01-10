@@ -6,52 +6,74 @@
 //
 
 import CoreData
+import Foundation
 
 struct PersistenceController {
     static let shared = PersistenceController()
 
-    @MainActor
-    static let preview: PersistenceController = {
+    static var preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-        }
+        
         do {
+            // Create sample shopping lists
+            let groceryList = createShoppingList(name: "Grocery Shopping", dueDate: Date().addingTimeInterval(86400), isCompleted: false, in: viewContext)
+            let electronicsList = createShoppingList(name: "Electronics", dueDate: Date().addingTimeInterval(172800), isCompleted: true, in: viewContext)
+            
+            // Add items to grocery list
+            createShoppingItem(name: "Milk", category: "Groceries", quantity: 2, isCompleted: true, in: viewContext, list: groceryList)
+            createShoppingItem(name: "Bread", category: "Groceries", quantity: 1, isCompleted: false, in: viewContext, list: groceryList)
+            createShoppingItem(name: "Eggs", category: "Groceries", quantity: 12, isCompleted: false, in: viewContext, list: groceryList)
+            
+            // Add items to electronics list
+            createShoppingItem(name: "USB Cable", category: "Electronics", quantity: 1, isCompleted: true, in: viewContext, list: electronicsList)
+            createShoppingItem(name: "Power Bank", category: "Electronics", quantity: 1, isCompleted: true, in: viewContext, list: electronicsList)
+            
             try viewContext.save()
         } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
             let nsError = error as NSError
             fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
         }
         return result
     }()
+    
+    static func createShoppingList(name: String, dueDate: Date, isCompleted: Bool, in context: NSManagedObjectContext) -> ShoppingList {
+        let list = ShoppingList(context: context)
+        list.name = name
+        list.timestamp = Date()
+        list.dueDate = dueDate
+        list.isCompleted = isCompleted
+        list.completedDate = isCompleted ? Date() : nil
+        return list
+    }
+    
+    static func createShoppingItem(name: String, category: String, quantity: Int32, isCompleted: Bool, in context: NSManagedObjectContext, list: ShoppingList) {
+        let item = ShoppingItem(context: context)
+        item.name = name
+        item.category = category
+        item.quantity = Double(quantity)
+        item.timestamp = Date()
+        item.isCompleted = isCompleted
+        item.completedDate = isCompleted ? Date() : nil
+        item.list = list
+    }
 
-    let container: NSPersistentCloudKitContainer
+    let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        container = NSPersistentCloudKitContainer(name: "ShoppingList")
+        container = NSPersistentContainer(name: "ShoppingList")
+        
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
-        container.loadPersistentStores(completionHandler: { (storeDescription, error) in
+        
+        container.loadPersistentStores { description, error in
             if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-
-                /*
-                 Typical reasons for an error here include:
-                 * The parent directory does not exist, cannot be created, or disallows writing.
-                 * The persistent store is not accessible, due to permissions or data protection when the device is locked.
-                 * The device is out of space.
-                 * The store could not be migrated to the current model version.
-                 Check the error message to determine what the actual problem was.
-                 */
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             }
-        })
+        }
+        
         container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
 }
